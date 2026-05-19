@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { onboardSlides } from '../data/appData';
+import { authService } from '../services/api';
+import { useApp } from '../context/AppContext';
 
 export function Onboarding() {
   const [step, setStep] = useState(0);
@@ -87,10 +89,69 @@ export function Onboarding() {
 
 export function Login() {
   const navigate = useNavigate();
+  const { login, showToast } = useApp();
   const [tab, setTab] = useState('email');
   const [email, setEmail] = useState('kwame@example.com');
   const [pass, setPass] = useState('password');
   const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [corporateEmail, setCorporateEmail] = useState('');
+  const [corporateCode, setCorporateCode] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
+
+  const handleEmailLogin = async () => {
+    if (!email || !pass) {
+      showToast('Please enter email and password', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await authService.loginEmail(email, pass);
+      login(response.user, response.token);
+      showToast('Login successful!', 'success');
+      navigate('/home');
+    } catch (error) {
+      showToast(error.message || 'Login failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    if (!email) {
+      showToast('Please enter email', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await authService.loginBiometric(email);
+      login(response.user, response.token);
+      showToast('Biometric login successful!', 'success');
+      navigate('/home');
+    } catch (error) {
+      showToast(error.message || 'Biometric login failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCorporateLogin = async () => {
+    if (!corporateEmail || !corporateCode || !employeeId) {
+      showToast('Please fill all corporate fields', 'error');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await authService.loginCorporate(corporateEmail, corporateCode, employeeId);
+      login(response.user, response.token);
+      showToast('Corporate login successful!', 'success');
+      navigate('/home');
+    } catch (error) {
+      showToast(error.message || 'Corporate login failed', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <motion.div
@@ -133,34 +194,56 @@ export function Login() {
           ))}
         </div>
 
-        {tab==='biometric' ? (
+        {tab==='email' && (
+          <>
+            <div style={{ marginBottom:14 }}>
+              <span className="label">Email Address</span>
+              <input className="input" type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="kwame@example.com" />
+            </div>
+            <div style={{ marginBottom:22, position:'relative' }}>
+              <span className="label">Password</span>
+              <input className="input" type={showPass?'text':'password'} value={pass} onChange={e=>setPass(e.target.value)} placeholder="••••••••" style={{ paddingRight:48 }} />
+              <button onClick={()=>setShowPass(!showPass)} style={{ position:'absolute', right:14, top:36, background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:16 }}>
+                {showPass?'🙈':'👁️'}
+              </button>
+            </div>
+            <motion.button whileTap={{ scale:0.98 }} className="btn-primary" onClick={handleEmailLogin} disabled={loading}>
+              {loading ? '🔄 Logging in...' : 'Continue →'}
+            </motion.button>
+          </>
+        )}
+
+        {tab==='corporate' && (
+          <>
+            <div style={{ marginBottom:14 }}>
+              <span className="label">Corporate Email</span>
+              <input className="input" type="email" value={corporateEmail} onChange={e=>setCorporateEmail(e.target.value)} placeholder="company@corporate.com" />
+            </div>
+            <div style={{ marginBottom:14 }}>
+              <span className="label">Corporate Code</span>
+              <input className="input" type="text" value={corporateCode} onChange={e=>setCorporateCode(e.target.value)} placeholder="CODE123" />
+            </div>
+            <div style={{ marginBottom:22 }}>
+              <span className="label">Employee ID</span>
+              <input className="input" type="text" value={employeeId} onChange={e=>setEmployeeId(e.target.value)} placeholder="EMP001" />
+            </div>
+            <motion.button whileTap={{ scale:0.98 }} className="btn-primary" onClick={handleCorporateLogin} disabled={loading}>
+              {loading ? '🔄 Logging in...' : 'Continue →'}
+            </motion.button>
+          </>
+        )}
+
+        {tab==='biometric' && (
           <div style={{ textAlign:'center', padding:'24px 0' }}>
             <motion.div
               whileTap={{ scale:0.9 }}
               animate={{ boxShadow:['0 0 0 0 rgba(13,148,136,0.4)','0 0 0 16px rgba(13,148,136,0)','0 0 0 0 rgba(13,148,136,0)'] }}
               transition={{ duration:2, repeat:Infinity }}
-              onClick={() => navigate('/home')}
-              style={{ width:80, height:80, borderRadius:'50%', background:'rgba(13,148,136,0.12)', border:'2px solid rgba(13,148,136,0.3)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px', cursor:'pointer', fontSize:32 }}
+              onClick={handleBiometricLogin}
+              style={{ width:80, height:80, borderRadius:'50%', background:'rgba(13,148,136,0.12)', border:'2px solid rgba(13,148,136,0.3)', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px', cursor:loading?'wait':'pointer', fontSize:32, opacity:loading?0.6:1 }}
             >🔏</motion.div>
-            <p style={{ color:'var(--muted)', fontSize:14 }}>Tap to use Touch ID / Face ID</p>
+            <p style={{ color:'var(--muted)', fontSize:14 }}>{loading ? 'Authenticating...' : 'Tap to use Touch ID / Face ID'}</p>
           </div>
-        ) : (
-          <>
-            <div style={{ marginBottom:14 }}>
-              <span className="label">Email Address</span>
-              <input className="input" type="email" value={email} onChange={e=>setEmail(e.target.value)} />
-            </div>
-            <div style={{ marginBottom:22, position:'relative' }}>
-              <span className="label">Password</span>
-              <input className="input" type={showPass?'text':'password'} value={pass} onChange={e=>setPass(e.target.value)} style={{ paddingRight:48 }} />
-              <button onClick={()=>setShowPass(!showPass)} style={{ position:'absolute', right:14, top:36, background:'none', border:'none', cursor:'pointer', color:'var(--muted)', fontSize:16 }}>
-                {showPass?'🙈':'👁️'}
-              </button>
-            </div>
-            <motion.button whileTap={{ scale:0.98 }} className="btn-primary" onClick={()=>navigate('/home')}>
-              Continue →
-            </motion.button>
-          </>
         )}
       </motion.div>
 

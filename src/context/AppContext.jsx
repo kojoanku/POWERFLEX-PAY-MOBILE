@@ -1,21 +1,72 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-import { user as U } from '../data/appData';
+import { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { authService, walletService } from '../services/api';
 
 const Ctx = createContext(null);
 
 export function AppProvider({ children }) {
-  const [currentUser] = useState(U);
-  const [walletBalance, setWalletBalance] = useState(U.walletBalance);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [walletBalance, setWalletBalance] = useState(0);
   const [toast, setToast] = useState(null);
-  const [unread] = useState(3);
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  // Initialize auth state on mount
+  useEffect(() => {
+    const storedUser = authService.getStoredUser();
+    if (storedUser && authService.isLoggedIn()) {
+      setCurrentUser(storedUser);
+      setIsAuthenticated(true);
+      // Load wallet balance
+      walletService.getWallet()
+        .then(data => setWalletBalance(data.wallet?.available_balance || 0))
+        .catch(err => console.error('[v0] Failed to load wallet:', err));
+    }
+    setLoading(false);
+  }, []);
 
   const showToast = useCallback((msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  const login = useCallback((user, token) => {
+    setCurrentUser(user);
+    setIsAuthenticated(true);
+    localStorage.setItem('token', token);
+    localStorage.setItem('user', JSON.stringify(user));
+  }, []);
+
+  const logout = useCallback(() => {
+    setCurrentUser(null);
+    setIsAuthenticated(false);
+    setWalletBalance(0);
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+  }, []);
+
+  const updateWallet = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await walletService.getWallet();
+      setWalletBalance(data.wallet?.available_balance || 0);
+    } catch (err) {
+      console.error('[v0] Failed to update wallet:', err);
+    }
+  }, [isAuthenticated]);
+
   return (
-    <Ctx.Provider value={{ currentUser, walletBalance, setWalletBalance, showToast, unread }}>
+    <Ctx.Provider value={{ 
+      currentUser, 
+      setCurrentUser,
+      walletBalance, 
+      setWalletBalance,
+      showToast, 
+      loading,
+      isAuthenticated,
+      login,
+      logout,
+      updateWallet,
+    }}>
       {children}
       {toast && (
         <div style={{
